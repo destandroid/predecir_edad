@@ -1,12 +1,12 @@
 import os
 import streamlit as st
 import numpy as np
-import cv2
 from tensorflow.keras.models import load_model
 import pandas as pd
 from collections import Counter
 from datetime import datetime
 import plotly.graph_objects as go
+from PIL import Image
 
 # Configuración
 st.set_page_config(page_title="Predicción de Edad", layout="wide")
@@ -46,56 +46,51 @@ else:
 uploaded_file = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-    
-    if img is not None:
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
-        img_norm = img_resized / 255.0
-        img_exp = np.expand_dims(img_norm, axis=0)
+    img = Image.open(uploaded_file).convert("RGB")
+    img_resized = img.resize((IMG_SIZE, IMG_SIZE))
+    img_norm = np.asarray(img_resized) / 255.0
+    img_exp = np.expand_dims(img_norm, axis=0)
 
-        age_pred, gender_pred, race_pred = model.predict(img_exp)
+    # Predicción
+    age_pred, gender_pred, race_pred = model.predict(img_exp)
 
-        pred_age_index = np.argmax(age_pred)
-        pred_age = age_labels[pred_age_index]
-        pred_gender = gender_labels[np.argmax(gender_pred)]
-        pred_race = race_labels[np.argmax(race_pred)]
+    pred_age_index = np.argmax(age_pred)
+    pred_age = age_labels[pred_age_index]
+    pred_gender = gender_labels[np.argmax(gender_pred)]
+    pred_race = race_labels[np.argmax(race_pred)]
 
-        
-        col_empty, col_img, col_data = st.columns([0.5, 1, 1])
+    col_empty, col_img, col_data = st.columns([0.5, 1, 1])
 
-        with col_img:
-            st.image(img_rgb, caption="Imagen subida", width=300)
+    with col_img:
+        st.image(img, caption="Imagen subida", width=300)
 
-        with col_data:
-            st.markdown(f"### 🧓 Edad estimada: {pred_age}")
-            st.markdown(f"### 🚻 Género estimado: {pred_gender}")
-            st.markdown(f"### 🌍 Raza estimada: {pred_race}")
+    with col_data:
+        st.markdown(f"### 🧓 Edad estimada: {pred_age}")
+        st.markdown(f"### 🚻 Género estimado: {pred_gender}")
+        st.markdown(f"### 🌍 Raza estimada: {pred_race}")
 
+    st.session_state["age_history"].append(pred_age)
+    st.session_state["gender_history"].append(pred_gender)
+    st.session_state["race_history"].append(pred_race)
+    st.session_state["date_history"].append(datetime.now().strftime("%Y-%m-%d"))
 
-        st.session_state["age_history"].append(pred_age)
-        st.session_state["gender_history"].append(pred_gender)
-        st.session_state["race_history"].append(pred_race)
-        st.session_state["date_history"].append(datetime.now().strftime("%Y-%m-%d"))
+    # igualar longitudes
+    max_len = len(st.session_state["age_history"])
+    for key, fill in [
+        ("gender_history", "NA"),
+        ("race_history", "NA"),
+        ("date_history", "NA")
+    ]:
+        while len(st.session_state[key]) < max_len:
+            st.session_state[key].append(fill)
 
-        # igualar longitudes
-        max_len = len(st.session_state["age_history"])
-        for key, fill in [
-            ("gender_history", "NA"),
-            ("race_history", "NA"),
-            ("date_history", "NA")
-        ]:
-            while len(st.session_state[key]) < max_len:
-                st.session_state[key].append(fill)
-
-        df_guardar = pd.DataFrame({
-            "edad": st.session_state["age_history"],
-            "genero": st.session_state["gender_history"],
-            "raza": st.session_state["race_history"],
-            "fecha": st.session_state["date_history"]
-        })
-        df_guardar.to_csv(HISTORIC_FILE, index=False)
+    df_guardar = pd.DataFrame({
+        "edad": st.session_state["age_history"],
+        "genero": st.session_state["gender_history"],
+        "raza": st.session_state["race_history"],
+        "fecha": st.session_state["date_history"]
+    })
+    df_guardar.to_csv(HISTORIC_FILE, index=False)
 
 # Gráficos con Plotly
 if st.session_state["age_history"]:
