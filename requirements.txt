@@ -1,7 +1,6 @@
-cv2
 streamlit
 tensorflow
 numpy
-opencv-python
 pandas
 plotly
+Pillow
